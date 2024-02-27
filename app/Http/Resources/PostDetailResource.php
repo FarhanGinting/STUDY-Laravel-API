@@ -18,9 +18,27 @@ class PostDetailResource extends JsonResource
             'id' => $this->id,
             'title' => $this->title,
             'news_content' => $this->news_content,
+            'created_at' => date_format($this->created_at, "Y/m/d H:i:s"),
             'author_id' => $this->author_id,
             'writer' => $this->whenLoaded('Author'),
-            'created_at' => date_format($this->created_at, "Y/m/d H:i:s")
+            'comments' => $this->whenLoaded('Comments', function () {
+                return $this->comments->map(function ($comment) {
+                    return [
+                        'id' => $comment->id,
+                        'post_id' => $comment->post_id,
+                        'user_id' => $comment->user_id,
+                        'comments_content' => $comment->comments_content,
+                        'commentator' => [
+                            'id' => $comment->Commentator->id,
+                            'email' => $comment->Commentator->email,
+                            'username' => $comment->Commentator->username,
+                        ],
+                    ];
+                });
+            }),
+            'comment_total' => $this->whenLoaded('Comments', function () {
+                return $this->comments->count();
+            })
         ];
     }
 }
