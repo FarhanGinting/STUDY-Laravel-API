@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Http\Resources\PostDetailResource;
 use App\Models\Post;
 use Illuminate\Http\Request;
-use App\Http\Resources\PostResource;
 use Illuminate\Support\Facades\Auth;
-use App\Http\Resources\PostDetailResource;
+use Illuminate\Support\Facades\Storage;
 
 class PostController extends Controller
 {
@@ -37,9 +37,19 @@ class PostController extends Controller
             'title' => 'required|max:255',
             'news_content' => 'required',
         ]);
+
+        $image = null;
+        if ($request->file) {
+            //Di sini memproses pemasukkan gambar ke database
+            $fileName = $this->generateRandomString();
+            $extension = $request->file->extension();
+            $image = $fileName . '.' . $extension;
+            Storage::putFileAs('image', $request->file, $image);
+        }
+        $request['image'] = $image;
         $request['author_id'] = Auth::user()->id;
         $post = Post::create($request->all());
-        return new  PostDetailResource($post->loadMissing(['Author:id,username']));
+        return new PostDetailResource($post->loadMissing(['Author:id,username']));
     }
 
     /**
@@ -48,7 +58,7 @@ class PostController extends Controller
     public function show(string $id)
     {
         $post = Post::with(['Author:id,username'])->findOrFail($id);
-        return new  PostDetailResource($post->loadMissing(['Author:id,username', 'Comments:id,post_id,user_id,comments_content']));
+        return new PostDetailResource($post->loadMissing(['Author:id,username', 'Comments:id,post_id,user_id,comments_content']));
     }
 
     // public function show2(string $id)
@@ -76,8 +86,32 @@ class PostController extends Controller
         ]);
 
         $post = Post::findOrFail($id);
-        $post->update($request->all());
-        return new  PostDetailResource($post->loadMissing(['Author:id,username']));
+
+        // Periksa apakah ada file gambar baru yang dikirimkan
+        if ($request->file) {
+            // Hapus gambar lama jika ada
+            if ($post->image) {
+                Storage::delete('image/' . $post->image);
+            }
+
+            // Memproses pemasukkan gambar ke database
+            $fileName = $this->generateRandomString();
+            $extension = $request->file->extension();
+            $newImage = $fileName . '.' . $extension;
+            Storage::putFileAs('image', $request->file, $newImage);
+
+            // Update field image pada post
+            $post->update(['image' => $newImage]);
+        }
+
+        // Update field lainnya
+        $post->update([
+            'title' => $request->title,
+            'news_content' => $request->news_content,
+            // tambahkan kolom lain yang ingin Anda update
+        ]);
+
+        return new PostDetailResource($post->loadMissing(['Author:id,username']));
     }
 
     /**
@@ -87,6 +121,17 @@ class PostController extends Controller
     {
         $post = Post::findOrFail($id);
         $post->delete();
-        return new  PostDetailResource($post->loadMissing(['Author:id,username']));
+        return new PostDetailResource($post->loadMissing(['Author:id,username']));
+    }
+
+    public function generateRandomString($length = 30)
+    {
+        $characters = '0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $charactersLength = strlen($characters);
+        $randomString = '';
+        for ($i = 0; $i < $length; $i++) {
+            $randomString .= $characters[random_int(0, $charactersLength - 1)];
+        }
+        return $randomString;
     }
 }
